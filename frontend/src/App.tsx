@@ -1,17 +1,11 @@
 import React from 'react';
+import { HlsPlayer } from './components/HlsPlayer';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a className="App-link" href="https://reactjs.org" target="_blank" rel="noopener noreferrer">
-          Learn React
-        </a>
-      </header>
-    </div>
+    <>
+      <HlsPlayer source="http://localhost:8000/hls1/cam1.m3u8" />
+    </>
   );
 }
 
