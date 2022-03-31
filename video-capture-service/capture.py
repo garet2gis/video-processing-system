@@ -53,10 +53,10 @@ class ReconnectingCamGear:
 
 
 class RTSPStreamGear:
-    def __init__(self, cam_id, source, logging=False):
+    def __init__(self, cam_id, source, is_logging=False):
         self.cam_id = cam_id
         self.capture_source = source
-        self.logging = logging
+        self.logging = is_logging
 
         self.camera_gear = ReconnectingCamGear(
             cam_address=self.capture_source,
@@ -73,14 +73,14 @@ class RTSPStreamGear:
         frame = self.camera_gear.read()
 
         if frame is None:
-            return False
+            return None
 
         frame = reducer(frame, percentage=30)
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         self.stream_gear.stream(frame)
 
-        return True
+        return frame
 
     def stop(self):
         self.camera_gear.stop()
@@ -99,13 +99,13 @@ class MultipleStreams:
                 is_error = False
                 for i in self.streams.keys():
                     ret = self.streams[i].stream_frame()
-                    if not ret:
+                    if ret is None:
                         is_error = True
                 if is_error:
                     break
 
         except KeyboardInterrupt:
-            print("Detected Keyboard Interrupt. Quitting...")
+            logging.error("Detected Keyboard Interrupt. Quitting...")
             pass
 
         finally:
@@ -123,7 +123,7 @@ if __name__ == "__main__":
         if not os.path.exists(f'streams/hls{i}'):
             try:
                 os.mkdir(f'streams/hls{i}')
-                logging.error(f'Made new directory to save stream: streams/hls{i}')
+                logging.info(f'Made new directory to save stream: streams/hls{i}')
             except OSError:
                 logging.error('Unable to create directory')
 
