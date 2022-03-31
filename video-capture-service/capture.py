@@ -3,15 +3,66 @@ import cv2
 import os
 from vidgear.gears.helper import reducer
 import logging
+import datetime
+import time
 
 
-class MultipleStreamGear:
+class ReconnectingCamGear:
+    def __init__(self, cam_address, reset_attempts=50, reset_delay=5, is_logging=False):
+        self.cam_address = cam_address
+        self.reset_attempts = reset_attempts
+        self.logging = is_logging
+        self.reset_delay = reset_delay
+        self.source = CamGear(source=self.cam_address, logging=self.logging).start()
+        self.running = True
+
+    def read(self):
+        if self.source is None:
+            return None
+        if self.running and self.reset_attempts > 0:
+            frame = self.source.read()
+            if frame is None:
+                self.source.stop()
+                self.reset_attempts -= 1
+                logging.info(
+                    "Re-connection Attempt-{} occured at time:{}".format(
+                        str(self.reset_attempts),
+                        datetime.datetime.now().strftime("%m-%d-%Y %I:%M:%S%p"),
+                    )
+                )
+                time.sleep(self.reset_delay)
+                self.source = CamGear(source=self.cam_address, logging=self.logging).start()
+                # return previous frame
+                return self.frame
+            else:
+                self.frame = frame
+                return frame
+        else:
+            return None
+
+    def stop(self):
+        self.running = False
+        self.reset_attempts = 0
+        self.frame = None
+        if self.source is not None:
+            self.source.stop()
+
+    @property
+    def framerate(self):
+        return self.source.framerate
+
+
+class RTSPStreamGear:
     def __init__(self, cam_id, source, logging=False):
         self.cam_id = cam_id
         self.capture_source = source
         self.logging = logging
 
-        self.camera_gear = CamGear(source=self.capture_source, logging=self.logging).start()
+        self.camera_gear = ReconnectingCamGear(
+            cam_address=self.capture_source,
+            reset_attempts=20,
+            reset_delay=5,
+        )
 
         stream_params = {"-input_framerate": self.camera_gear.framerate, "-livestream": True}
 
@@ -36,9 +87,35 @@ class MultipleStreamGear:
         self.stream_gear.terminate()
 
 
+class MultipleStreams:
+    def __init__(self, camera_sources):
+        self.streams = {}
+        for key, value in camera_sources.items():
+            self.streams[key] = RTSPStreamGear(key, value, True)
+
+    def start(self):
+        try:
+            while True:
+                is_error = False
+                for i in self.streams.keys():
+                    ret = self.streams[i].stream_frame()
+                    if not ret:
+                        is_error = True
+                if is_error:
+                    break
+
+        except KeyboardInterrupt:
+            print("Detected Keyboard Interrupt. Quitting...")
+            pass
+
+        finally:
+            for i in self.streams.keys():
+                self.streams[i].stop()
+
+
 if __name__ == "__main__":
     cameras = {
-        1: "rtsp://rtsp.stream/pattern",
+        1: "rtsp://cactus.tv:1554/cam1",
         2: "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
     }
 
@@ -47,28 +124,9 @@ if __name__ == "__main__":
             try:
                 os.mkdir(f'streams/hls{i}')
                 logging.error(f'Made new directory to save stream: streams/hls{i}')
-            except:
+            except OSError:
                 logging.error('Unable to create directory')
 
-    gears = {}
+    multiple_streams = MultipleStreams(cameras)
 
-    for key, value in cameras.items():
-        gears[key] = MultipleStreamGear(key, value, True)
-
-    try:
-        while True:
-            is_error = False
-            for i in gears.keys():
-                ret = gears[i].stream_frame()
-                if not ret:
-                    is_error = True
-            if is_error:
-                break
-
-    except KeyboardInterrupt:
-        print("Detected Keyboard Interrupt. Quitting...")
-        pass
-
-    finally:
-        for i in gears.keys():
-            gears[i].stop()
+    multiple_streams.start()
