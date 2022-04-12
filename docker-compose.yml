@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_ENDPOINT: ${API_URL}
+    ports:
+      - $FRONTEND_PORT:3000
+    restart: always
+
+  video-capture-service:
+    build:
+      context: ./video-capture-service
+    env_file:
+      - ./.env
+    volumes:
+      - static:/streams
+    restart: always
+    networks:
+      - network
+    ports:
+      - $BACKEND_PORT:8000
+
+
+networks:
+  network:
+
+volumes:
+  static:

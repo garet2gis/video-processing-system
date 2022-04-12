@@ -8,7 +8,6 @@ authors = ["garet2gis <br-avm32@yandex.ru>"]
 python = "^3.9"
 vidgear = {extras = ["asyncio"], version = "^0.2.5"}
 opencv-python = "^4.5.5"
-
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 

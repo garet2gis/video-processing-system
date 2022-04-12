@@ -12,7 +12,7 @@ function HlsPlayer({ source }: Props): JSX.Element {
     <ReactHlsPlayer
       playerRef={playerRef}
       src={source}
-      autoPlay={true}
+      autoPlay={false}
       controls={true}
       width="60%"
       height="auto"
@@ -22,6 +22,7 @@ function HlsPlayer({ source }: Props): JSX.Element {
         lowLatencyMode: true,
         autoStartLoad: true,
         debug: false,
+        liveDurationInfinity: true,
       }}
     />
   );
