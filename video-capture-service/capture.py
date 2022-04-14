@@ -76,6 +76,8 @@ class RTSPStreamGear:
             return None
 
         frame = reducer(frame, percentage=30)
+
+        # send to server
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         self.stream_gear.stream(frame)
