@@ -82,10 +82,10 @@ class RTSPStreamGear:
         if frame is None:
             return None
 
-        frame = reducer(frame, percentage=30)
 
         if self.stream_gear is not None:
-            self.stream_gear.stream(frame)
+            reduce_frame = reducer(frame, percentage=70)
+            self.stream_gear.stream(reduce_frame)
 
         if self.server is not None and self.count < 64:
             # resize for server nn
@@ -141,14 +141,21 @@ class MultipleStreams:
 
 if __name__ == "__main__":
     cameras = {
-        1: "rtsp://cactus.tv:1554/cam3",
+        # 1: "rtsp://cactus.tv:1554/cam3",
         4: "rtsp://cactus.tv:1554/cam15",
         # 2: "./videos/not_violence.mp4",
-        # 3: "./videos/violence2.mp4"
+        1: "./videos/violence2.mp4"
     }
 
     for i in cameras.keys():
-        if not os.path.exists(f'streams/hls{i}'):
+        if os.path.exists(f'streams/hls{i}'):
+            try:
+                os.rmdir(f'streams/hls{i}')
+                os.mkdir(f'streams/hls{i}')
+                logging.info(f'Made new directory to save stream: streams/hls{i}')
+            except OSError:
+                logging.error('Unable to recreate directory')
+        else:
             try:
                 os.mkdir(f'streams/hls{i}')
                 logging.info(f'Made new directory to save stream: streams/hls{i}')

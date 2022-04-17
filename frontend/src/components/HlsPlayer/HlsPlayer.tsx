@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import ReactHlsPlayer from 'react-hls-player';
 
 interface Props {
@@ -8,15 +8,20 @@ interface Props {
 function HlsPlayer({ source }: Props): JSX.Element {
   const playerRef = useRef<HTMLVideoElement>(null);
 
+  useEffect(() => {
+    playerRef.current?.play();
+  }, []);
+
   return (
     <ReactHlsPlayer
       playerRef={playerRef}
       src={source}
-      autoPlay={false}
+      autoPlay={true}
       controls={true}
-      width="60%"
-      height="auto"
+      width={'auto'}
+      height="300px"
       hlsConfig={{
+        enableWorker: true,
         maxLoadingDelay: 4,
         minAutoBitrate: 0,
         lowLatencyMode: true,

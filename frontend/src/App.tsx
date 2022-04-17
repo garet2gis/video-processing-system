@@ -1,22 +1,28 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { observer } from 'mobx-react-lite';
 import { HlsPlayer } from './components/HlsPlayer';
+import streamStore from './store';
+
+const Info = observer(({ camId }: { camId: number }) => {
+  return (
+    <span style={{ marginLeft: '24px' }}>{`Вероятность насилия: ${
+      streamStore.getContains(camId)?.prediction ?? 'none'
+    }%`}</span>
+  );
+});
 
 function App() {
-  useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8010/');
-
-    ws.onmessage = (event: MessageEvent) => {
-      const errors = JSON.parse(event.data)?.errors;
-      if (errors) console.log('ws errors');
-      else console.log(event.data);
-    };
-  }, []);
-
   return (
-    <>
-      <HlsPlayer source="http://localhost:8000/streams/hls1/cam1.m3u8" />
-      <HlsPlayer source="http://localhost:8000/streams/hls4/cam4.m3u8" />
-    </>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <HlsPlayer source="http://localhost:8000/streams/hls1/cam1.m3u8" />
+        <Info camId={1} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <HlsPlayer source="http://localhost:8000/streams/hls4/cam4.m3u8" />
+        <Info camId={4} />
+      </div>
+    </div>
   );
 }
 
