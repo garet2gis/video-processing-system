@@ -1,10 +1,11 @@
-from vidgear.gears import CamGear, StreamGear
+from vidgear.gears import StreamGear, NetGear, VideoGear
 import cv2
 import os
 from vidgear.gears.helper import reducer
 import logging
 import datetime
 import time
+import numpy as np
 
 
 class ReconnectingCamGear:
@@ -13,7 +14,7 @@ class ReconnectingCamGear:
         self.reset_attempts = reset_attempts
         self.logging = is_logging
         self.reset_delay = reset_delay
-        self.source = CamGear(source=self.cam_address, logging=self.logging).start()
+        self.source = VideoGear(source=self.cam_address, logging=self.logging).start()
         self.running = True
 
     def read(self):
@@ -31,7 +32,7 @@ class ReconnectingCamGear:
                     )
                 )
                 time.sleep(self.reset_delay)
-                self.source = CamGear(source=self.cam_address, logging=self.logging).start()
+                self.source = VideoGear(source=self.cam_address, logging=self.logging).start()
                 # return previous frame
                 return self.frame
             else:
@@ -53,10 +54,13 @@ class ReconnectingCamGear:
 
 
 class RTSPStreamGear:
-    def __init__(self, cam_id, source, is_logging=False):
+    def __init__(self, cam_id, source, server=None, is_logging=False, enable_stream=True):
         self.cam_id = cam_id
+        self.server = server
         self.capture_source = source
         self.logging = is_logging
+
+        self.count = 0
 
         self.camera_gear = ReconnectingCamGear(
             cam_address=self.capture_source,
@@ -64,10 +68,13 @@ class RTSPStreamGear:
             reset_delay=5,
         )
 
-        stream_params = {"-input_framerate": self.camera_gear.framerate, "-livestream": True}
+        self.stream_gear = None
+        if enable_stream:
+            stream_params = {"-vf": "scale=1280:-2", "-profile:v": "high444", "-livestream": True, "-streams": [
+                {"-resolution": "640x360"}]}
 
-        self.stream_gear = StreamGear(output=f"streams/hls{self.cam_id}/cam{self.cam_id}.m3u8", format="hls",
-                                      logging=self.logging, **stream_params)
+            self.stream_gear = StreamGear(output=f"streams/hls{self.cam_id}/cam{self.cam_id}.m3u8", format="hls",
+                                          logging=self.logging, **stream_params)
 
     def stream_frame(self):
         frame = self.camera_gear.read()
@@ -77,10 +84,20 @@ class RTSPStreamGear:
 
         frame = reducer(frame, percentage=30)
 
-        # send to server
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if self.stream_gear is not None:
+            self.stream_gear.stream(frame)
 
-        self.stream_gear.stream(frame)
+        if self.server is not None and self.count < 64:
+            # resize for server nn
+            frame = cv2.resize(frame, (224, 224), interpolation=cv2.INTER_AREA)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = np.reshape(frame, (224, 224, 3))
+            self.server.send(frame, message=str(self.cam_id))
+
+        self.count += 1
+
+        if self.count == 128:
+            self.count = 0
 
         return frame
 
@@ -90,10 +107,14 @@ class RTSPStreamGear:
 
 
 class MultipleStreams:
-    def __init__(self, camera_sources):
+    def __init__(self, camera_sources, enable_stream=True, enable_netgear=True):
+        self.server = None
+        if enable_netgear:
+            options = {"bidirectional_mode": True}
+            self.server = NetGear(logging=True, **options)
         self.streams = {}
         for key, value in camera_sources.items():
-            self.streams[key] = RTSPStreamGear(key, value, True)
+            self.streams[key] = RTSPStreamGear(key, value, self.server, is_logging=True, enable_stream=enable_stream)
 
     def start(self):
         try:
@@ -101,8 +122,11 @@ class MultipleStreams:
                 is_error = False
                 for i in self.streams.keys():
                     ret = self.streams[i].stream_frame()
+
                     if ret is None:
                         is_error = True
+                        break
+
                 if is_error:
                     break
 
@@ -117,8 +141,10 @@ class MultipleStreams:
 
 if __name__ == "__main__":
     cameras = {
-        1: "rtsp://cactus.tv:1554/cam1",
-        2: "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
+        1: "rtsp://cactus.tv:1554/cam3",
+        4: "rtsp://cactus.tv:1554/cam15",
+        # 2: "./videos/not_violence.mp4",
+        # 3: "./videos/violence2.mp4"
     }
 
     for i in cameras.keys():
@@ -129,6 +155,6 @@ if __name__ == "__main__":
             except OSError:
                 logging.error('Unable to create directory')
 
-    multiple_streams = MultipleStreams(cameras)
+    multiple_streams = MultipleStreams(cameras, enable_stream=True)
 
     multiple_streams.start()

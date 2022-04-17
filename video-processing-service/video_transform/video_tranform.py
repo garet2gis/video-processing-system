@@ -76,6 +76,22 @@ def Video2Npy(file_path, resize=(224, 224)):
     return result
 
 
+def process_frames(frames_64):
+    frames = np.array(frames_64)
+
+    # Get the optical flow of video
+    flows = getOpticalFlow(frames)
+
+    result = np.zeros((len(flows), 224, 224, 5))
+    result[..., :3] = frames
+    result[..., 3:] = flows
+
+    result[..., :3] = normalize(result[..., :3])
+    result[..., 3:] = normalize(result[..., 3:])
+
+    return np.reshape(result, [1, 64, 224, 224, 5])
+
+
 def Save2Npy(file_dir, save_dir):
     """Transfer all the videos and save them into specified directory
     Args:
@@ -131,10 +147,6 @@ def normalize(data):
 
 
 def load_data(data):
-    # sampling 64 frames uniformly from the entire video
-    data = uniform_sampling(video=data, target_frames=64)
-    # whether to utilize the data augmentation
-    # normalize rgb images and optical flows, respectively
     data[..., :3] = normalize(data[..., :3])
     data[..., 3:] = normalize(data[..., 3:])
 
