@@ -10,7 +10,6 @@ from datetime import datetime
 import concurrent.futures
 from multiprocessing import Process
 
-
 def prediction(model, frames):
     ret_val = model.predict(frames)
     return ret_val
@@ -53,6 +52,8 @@ class MultipleProcessing:
                 print(f"{self.count} {str(datetime.now().strftime('%H:%M:%S'))}")
 
                 # TODO: optimize this
+
+                self.cameras_buffers[cam_num].shape()
                 frames_64 = process_frames(self.cameras_buffers[cam_num])
                 res = self.model.predict(frames_64)
 
