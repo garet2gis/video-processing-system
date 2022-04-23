@@ -9,6 +9,8 @@ python = "^3.9"
 vidgear = {extras = ["asyncio"], version = "^0.2.5"}
 opencv-python = "^4.5.5"
 aiohttp = "^3.8.1"
+confluent-kafka = "^1.8.2"
+pydantic = "^1.9.0"
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 
