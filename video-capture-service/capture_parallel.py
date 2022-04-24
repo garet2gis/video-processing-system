@@ -1,4 +1,3 @@
-import asyncio
 from multiprocessing import Pool, cpu_count
 import numpy as np
 from typing import Deque, Any
@@ -11,13 +10,20 @@ import requests
 import preprocess_frames_functions
 import io
 from pydantic import BaseModel
+import asyncio
+import json
+import threading
+from confluent_kafka import Producer
 
-producer_config = {
-    'bootstrap.servers': 'localhost:9092',
+PROJECT_NAME = "ws_test"
+TOPIC_NAME = "prediction"
+KAFKA_INSTANCE = "0.0.0.0:9092"
+
+config = {
+    'bootstrap.servers': KAFKA_INSTANCE,
     'enable.idempotence': True,
     'acks': 'all',
     'retries': 100,
-    'max.in.flight.requests.per.connection': 5,
     'compression.type': 'snappy',
     'linger.ms': 5,
     'batch.num.messages': 32
@@ -42,17 +48,32 @@ def prediction_request(url: str, data: dict[str, io.BytesIO]) -> str:
     return prediction.json()['prediction']
 
 
-async def start_stream(cameras: dict[int, str], config: dict[int, NeuroserviceConfig], is_stream_enable: bool):
+def predict(url: str, arr: np.ndarray, cam_key: int, producer: Producer):
+    date_time = datetime.now()
+
+    data = produce_file(arr)
+
+    prediction = prediction_request(url, data)
+    data = {"prediction": prediction, "cam_id": cam_key, "timestamp_delay": date_time.timestamp()}
+    producer.produce(
+        topic=TOPIC_NAME,
+        value=json.dumps(data).encode("ascii"),
+    )
+
+    producer.poll(0)
+
+
+async def start_stream(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], is_stream_enable: bool):
     camera_gears: dict[int, ReconnectingRTSPGear] = {}
 
-    # producer = Producer(producer_config)
+    producer = Producer(config)
 
     camera_buffers: dict[int, dict[int, Deque[np.ndarray]]] = {}
 
     for cam_key in cameras.keys():
-        for nn_key in config.keys():
+        for nn_key in neuroservices.keys():
             camera_buffers[cam_key] = {}
-            camera_buffers[cam_key][nn_key] = deque(maxlen=int(config[nn_key].buffer_size))
+            camera_buffers[cam_key][nn_key] = deque(maxlen=int(neuroservices[nn_key].buffer_size))
 
     # Синхронно захватываем видео в процессе
     for key in cameras.keys():
@@ -80,9 +101,17 @@ async def start_stream(cameras: dict[int, str], config: dict[int, NeuroserviceCo
             if frame is None:
                 is_error = True
                 break
-            for cnn_key in config.keys():
 
-                preprocess_func = getattr(preprocess_frames_functions, config[cnn_key].preprocess_func_name,
+            # TODO: возможно вынести стриминг в отдельный процесс
+            if is_stream_enable:
+                reduce_frame = reducer(frame, percentage=50)
+                for key in stream_gears.keys():
+                    stream_gears[key].stream(reduce_frame)
+
+            for neuroservice_key in neuroservices.keys():
+
+                preprocess_func = getattr(preprocess_frames_functions,
+                                          neuroservices[neuroservice_key].preprocess_func_name,
                                           None)
 
                 if preprocess_func is not None and not callable(preprocess_func):
@@ -90,37 +119,25 @@ async def start_stream(cameras: dict[int, str], config: dict[int, NeuroserviceCo
 
                 frame = preprocess_func(frame)
 
-                camera_buffers[cam_key][cnn_key].append(frame)
+                camera_buffers[cam_key][neuroservice_key].append(frame)
 
-                if is_stream_enable:
-                    reduce_frame = reducer(frame, percentage=50)
-                    for key in stream_gears.keys():
-                        stream_gears[key].stream(reduce_frame)
-
-                if len(camera_buffers[cam_key][cnn_key]) == int(config[cnn_key].buffer_size):
+                if len(camera_buffers[cam_key][neuroservice_key]) == int(neuroservices[neuroservice_key].buffer_size):
 
                     try:
                         start_time_pred = datetime.now()
-                        arr = np.array(camera_buffers[cam_key][cnn_key])
-                        data = produce_file(arr)
 
-                        prediction = prediction_request(config[cnn_key].url, data)
+                        arr = np.array(camera_buffers[cam_key][neuroservice_key])
+                        th = threading.Thread(target=predict, args=(
+                            neuroservices[neuroservice_key].url, arr, cam_key, producer,), daemon=True)
+                        th.start()
 
-                        # producer.produce(
-                        #     topic="violence_prediction",
-                        #     value=prediction.json()['prediction'],
-                        #     headers={
-                        #         "cam_num": str.encode(str(key))
-                        #     }
-                        # )
-
-                        print(prediction)
                         print("request bound time:", datetime.now() - start_time_pred)
 
                     finally:
-                        camera_buffers[cam_key][cnn_key].clear()
+                        camera_buffers[cam_key][neuroservice_key].clear()
 
         if is_error:
+            await producer.stop()
             break
 
 
@@ -133,10 +150,10 @@ if __name__ == '__main__':
 
     need_streaming = False
 
+    # get this from database
     sources = [({1: "rtsp://cactus.tv:1554/cam15"}, {
         1: NeuroserviceConfig(url="http://localhost:8005/predict", buffer_size=64,
-                              preprocess_func_name="preprocess_frame_violence")
-
+                              preprocess_func_name="violence_preprocess")
     }, need_streaming)]
 
     with Pool(processes=num_workers) as pool:

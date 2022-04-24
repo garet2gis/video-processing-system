@@ -5,9 +5,14 @@ import streamStore from './store';
 
 const Info = observer(({ camId }: { camId: number }) => {
   return (
-    <span style={{ marginLeft: '24px' }}>{`Вероятность насилия: ${
-      streamStore.getContains(camId)?.prediction ?? 'none'
-    }%`}</span>
+    <>
+      <span style={{ marginLeft: '24px' }}>{`Вероятность насилия: ${
+        streamStore.getContains(camId)?.prediction ?? 'none'
+      }%`}</span>
+      <span style={{ marginLeft: '24px' }}>{`Задержка: ${
+        streamStore.getContains(camId)?.processDelay ?? 'none'
+      }`}</span>
+    </>
   );
 });
 
