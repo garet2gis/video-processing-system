@@ -1,20 +1,16 @@
+FROM python:3.9 as requirements-stage
+WORKDIR /tmp
+RUN pip install poetry
+COPY ./pyproject.toml /tmp/
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+RUN cat requirements.txt
+
 FROM python:3.9
-EXPOSE 8000
+EXPOSE 8001
+RUN apt-get clean && apt-get update && apt-get install ffmpeg librdkafka-dev --assume-yes --no-install-recommends
+WORKDIR /capture
+COPY --from=requirements-stage /tmp/requirements.txt /capture/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /capture/requirements.txt
+COPY . /capture
 
-RUN apt-get clean && apt-get update && apt-get install ffmpeg nodejs npm --assume-yes --no-install-recommends
-
-WORKDIR /video-capture-service
-
-RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install poetry
-
-RUN npm install --global http-server
-
-COPY poetry.lock pyproject.toml ./
-RUN poetry install
-
-COPY . .
-
-RUN ["chmod", "+x", "./scripts/docker-entrypoint.sh"]
-
-ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+ENTRYPOINT ["python3","capture_parallel.py"]

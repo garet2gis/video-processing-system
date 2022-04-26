@@ -111,9 +111,11 @@ x = Dense(128, activation='relu')(x)
 x = Dropout(0.2)(x)
 x = Dense(32, activation='relu')(x)
 
-# Build the model
 pred = Dense(2, activation='softmax')(x)
 model = Model(inputs=inputs, outputs=pred)
 model.summary()
 
-model.load_weights('./weights.h5')
+
+def reload_model_for_current_system():
+    model.load_weights('app/neural_networks/violence_recognition/weights.h5')
+    model.save('app/neural_networks/violence_recognition/weights.h5')

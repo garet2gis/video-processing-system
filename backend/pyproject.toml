@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "backend"
+version = "0.1.0"
+description = ""
+authors = ["garet2gis <br-avm32@yandex.ru>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.75.2"
+aiokafka = "^0.7.2"
+uvicorn = {extras = ["standart"], version = "^0.17.6"}
+websockets = "^10.3"
+pykafka = "^2.8.0"
+python-dotenv = "^0.20.0"
+
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

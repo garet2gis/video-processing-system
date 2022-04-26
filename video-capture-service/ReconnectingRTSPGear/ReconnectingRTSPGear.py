@@ -1,7 +1,9 @@
+import cv2
 from vidgear.gears import VideoGear
 import logging
 from datetime import datetime
 import time
+
 
 class ReconnectingRTSPGear:
     def __init__(self, cam_address, reset_attempts=50, reset_delay=5, is_logging=False):

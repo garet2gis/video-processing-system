@@ -8,9 +8,11 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.middleware.cors import CORSMiddleware
 import json
 
-PROJECT_NAME = "ws_test"
+PROJECT_NAME = "backend"
 TOPIC_NAME = "prediction"
-KAFKA_INSTANCE = "0.0.0.0:9092"
+# in docker env: host.docker.internal:9092
+# in local env: 127.0.0.1:9092
+KAFKA_INSTANCE = "host.docker.internal:9092"
 
 app = FastAPI(title=PROJECT_NAME)
 app.add_middleware(CORSMiddleware, allow_origins=["*"])

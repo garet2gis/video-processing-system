@@ -1,0 +1,47 @@
+# Virtual enviroment
+**/.env
+.env
+.venv
+venv
+
+# IDE
+**/.vscode
+*.idea
+**/.SpaceVim.d
+
+# Common
+*.DS_Store
+**/*.md
+*.md
+
+# Docker
+**/.dockerignore
+.dockerignore
+**/.gitignore
+.gitignore
+**/.git
+.git
+
+# Django staff
+static/
+media/
+logs/
+settings_local.py
+*.sqlite3
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+*.cover
+.mypy_cache/
+.pytest_cache/
+__pycache__
+
+# Exclude test files
+!static/testdata/
+
+streams/*
+!streams/.gitkeep
