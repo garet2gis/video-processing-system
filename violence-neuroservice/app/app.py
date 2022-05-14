@@ -2,7 +2,7 @@ from keras.models import load_model
 from fastapi import FastAPI, HTTPException, File
 import numpy as np
 from pydantic import BaseModel
-from .neural_networks.video_transform import video_tranform
+from app.neural_networks.video_transform import video_tranform
 from datetime import datetime
 import logging
 
