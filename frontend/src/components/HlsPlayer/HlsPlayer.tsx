@@ -19,7 +19,7 @@ function HlsPlayer({ source }: Props): JSX.Element {
       autoPlay={true}
       controls={true}
       width={'auto'}
-      height="300px"
+      height="200px"
       hlsConfig={{
         enableWorker: true,
         maxLoadingDelay: 4,

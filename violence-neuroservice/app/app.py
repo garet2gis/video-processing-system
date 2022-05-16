@@ -2,7 +2,7 @@ from keras.models import load_model
 from fastapi import FastAPI, HTTPException, File
 import numpy as np
 from pydantic import BaseModel
-from .neural_networks.video_transform import video_tranform
+from app.neural_networks.video_transform import video_tranform
 from datetime import datetime
 import logging
 
@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-model = load_model("app/neural_networks/violence_recognition/weights.h5", compile=False)
+model = load_model("app/neural_networks/test_model/mobile_net_model.h5", compile=False)
 
 
 @app.get("/")
@@ -23,10 +23,9 @@ class Prediction(BaseModel):
     prediction: float
 
 
-@app.post("/predict", response_model=Prediction)
+@app.post("/predict_frames64", response_model=Prediction)
 def predict(file: bytes = File(...)):
     data = {"success": False, "prediction": -1}
-
     try:
         process_bound_time = datetime.now()
         array_image = np.frombuffer(file, dtype=np.uint8)
@@ -46,4 +45,35 @@ def predict(file: bytes = File(...)):
         logging.info(f"is violence prob: {is_violence}")
 
     finally:
+        return data
+
+
+@app.post("/predict_frame", response_model=Prediction)
+def predict(file: bytes = File(...)):
+    global prev_np
+    data = {"success": False, "prediction": -1}
+    try:
+        process_bound_time = datetime.now()
+
+        array_image = np.frombuffer(file, dtype=np.uint8)
+        frame = np.array(np.reshape(array_image, (128, 128, 3)))
+        frame = frame.reshape(128, 128, 3) / 255
+        frame = np.expand_dims(frame, axis=0)
+
+        logging.info(f"process frames bound time: {datetime.now() - process_bound_time}")
+
+    except Exception:
+        raise HTTPException(status_code=400, detail="Bad request: wrong frames, can't parse")
+
+    try:
+        predict_bound_time = datetime.now()
+
+        is_violence = model.predict(frame)[0][0]
+        data['prediction'] = is_violence
+        data['success'] = True
+        logging.info(f"is violence prob: {is_violence}")
+
+        logging.info(f"predict frames bound time: {datetime.now() - predict_bound_time}")
+    finally:
+
         return data

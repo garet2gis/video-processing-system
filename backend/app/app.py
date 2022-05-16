@@ -12,7 +12,7 @@ PROJECT_NAME = "backend"
 TOPIC_NAME = "prediction"
 # in docker env: host.docker.internal:9092
 # in local env: 127.0.0.1:9092
-KAFKA_INSTANCE = "host.docker.internal:9092"
+KAFKA_INSTANCE = "0.0.0.0:9092"
 
 app = FastAPI(title=PROJECT_NAME)
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
@@ -59,12 +59,9 @@ class WebsocketConsumer(WebSocketEndpoint):
             self.send_consumer_message(websocket=websocket, topic_name=TOPIC_NAME)
         )
 
-        print('connect')
-
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
         self.consumer_task.cancel()
         await self.consumer.stop()
-        print('disconnect')
 
     async def on_receive(self, websocket: WebSocket, data: typing.Any) -> None:
         await websocket.send_json({"Message: ": data})

@@ -23,7 +23,7 @@ class StreamStore {
           event.data
         );
 
-        const delay = (message.timestamp - message.timestamp_delay * 1000) / 1000;
+        const delay = (new Date().getTime() - message.timestamp_delay * 1000) / 1000;
 
         const data: CameraPrediction = {
           camId: Number(message.cam_id),

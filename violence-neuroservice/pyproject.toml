@@ -8,14 +8,14 @@ authors = ["garet2gis <br-avm32@yandex.ru>"]
 python = "^3.9"
 fastapi = "^0.75.2"
 uvicorn = {extras = ["standart"], version = "^0.17.6"}
-tensorflow-macos = "^2.8.0"
-tensorflow-metal = "^0.4.0"
 h5py = "^3.6.0"
 multipart = "^0.2.4"
 python-multipart = "^0.0.5"
 opencv-python = "^4.5.5"
 tqdm = "^4.64.0"
 python-dotenv = "^0.20.0"
+tensorflow-macos = "^2.8.0"
+tensorflow-metal = "^0.4.0"
 
 [tool.poetry.dev-dependencies]
 
