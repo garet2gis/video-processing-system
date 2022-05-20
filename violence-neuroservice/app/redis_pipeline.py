@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 import logging
+from neural_networks.video_transform import video_tranform
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,20 +23,23 @@ QUEUE_NAME = os.getenv('QUEUE_NAME')
 TIMEOUT_MODEL = os.getenv('TIMEOUT_MODEL')
 REDIS_HOST = os.getenv('REDIS_HOST')
 REDIS_PORT = os.getenv('REDIS_PORT')
+MODEL_TYPE = os.getenv('MODEL_TYPE')
 
 # Connect to Redis server
 db = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT)
 
-# Load the pre-trained Keras model
-model = load_model("neural_networks/violence_detection_cnn_lstm/weights.h5", compile=False)
-# model = load_model("app/neural_networks/violence_detection_3dcnn/weights.h5", compile=False)
-# model = load_model("app/neural_networks/mobile_net_pretrained/weights.h5", compile=False)
-
-shape_lstm_cnn = (1, 30, 160, 160, 3)
-# shape_cnn3d = (1, 64, 224, 224, 3)
-# shape_cnn2d = (1, 128, 128, 3)
-
-np_dtype = np.float64  # np_dtype = np.uint8
+if MODEL_TYPE == 'cnn3d':
+    model = load_model("app/neural_networks/violence_detection_3dcnn/weights.h5", compile=False)
+    shape = (1, 64, 224, 224, 3)
+    np_dtype = np.uint8
+elif MODEL_TYPE == 'cnn_lstm':
+    model = load_model("app/neural_networks/violence_detection_cnn_lstm/weights.h5", compile=False)
+    shape = (1, 30, 160, 160, 3)
+    np_dtype = np.float64
+else:
+    model = load_model("app/neural_networks/mobile_net_pretrained/weights.h5", compile=False)
+    shape = (1, 128, 128, 3)
+    np_dtype = np.uint8
 
 
 def base64_decode_frames(a, dtype: np.dtype, shape):
@@ -79,17 +83,20 @@ def classify_process():
 
             # Deserialize the object and obtain the input image
             q = json.loads(q.decode("utf-8"))
-            image = base64_decode_frames(q["frames"],
-                                         np_dtype,
-                                         shape_lstm_cnn)
+            frames = base64_decode_frames(q["frames"],
+                                          np_dtype,
+                                          shape)
+
+            if MODEL_TYPE == 'cnn3d':
+                frames = video_tranform.process_frames(frames)
 
             # Check to see if the batch list is None
             if batch is None:
-                batch = image
+                batch = frames
 
             # Otherwise, stack the data
             else:
-                batch = np.vstack([batch, image])
+                batch = np.vstack([batch, frames])
 
             image_IDs.append(q["id"])
 

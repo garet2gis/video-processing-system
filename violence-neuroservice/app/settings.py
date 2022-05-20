@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     redis_host: str = '0.0.0.0'
     redis_port: int = 6379
     client_max_tries: int = 1000
+    model_type: str = 'cnn_lstm'
 
 
 settings = Settings(_env_file=".env", _env_file_encoding="utf-8")
