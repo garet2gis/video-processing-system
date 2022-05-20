@@ -16,16 +16,19 @@ import logging
 from vidgear.gears import StreamGear
 import os
 from vidgear.gears.helper import reducer
+from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
-TOPIC_NAME = "prediction"
-
-# in docker env: host.docker.internal
-# in local env: 127.0.0.1
-LOCALHOST = "127.0.0.1"
-
-KAFKA_INSTANCE = f"{LOCALHOST}:9092"
+TIMEOUT_SEC = os.getenv('TIMEOUT_SEC')
+TOPIC_NAME = os.getenv('TOPIC_NAME')
+LOCALHOST = os.getenv('LOCALHOST')
+# in docker env: KAFKA_INSTANCE_DOCKER
+# in local env: KAFKA_INSTANCE
+KAFKA_INSTANCE = os.getenv('KAFKA_INSTANCE')
 
 config = {
     'bootstrap.servers': KAFKA_INSTANCE,
@@ -56,30 +59,34 @@ def prediction_request(url: str, data: dict[str, io.BytesIO]) -> str:
     return prediction.json()['prediction']
 
 
-def predict(url: str, arr: np.ndarray, cam_key: int, producer: Producer, date_time: datetime):
+def predict(url: str, arr: np.ndarray, cam_key: int, date_time: datetime, producer: Optional[Producer] = None):
     data = frames_to_file(arr)
 
     prediction = prediction_request(url, data)
     print(prediction)
     data = {"prediction": prediction, "cam_id": cam_key, "timestamp_delay": date_time.timestamp()}
-    producer.produce(
-        topic=TOPIC_NAME,
-        value=json.dumps(data).encode("ascii"),
-    )
 
-    producer.poll(0)
+    if producer is not None:
+        producer.produce(
+            topic=TOPIC_NAME,
+            value=json.dumps(data).encode("ascii"),
+        )
+
+        producer.poll(0)
 
     logging.info(f"io bound time: {datetime.now() - date_time}")
 
 
-async def start_stream(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig]):
+async def start_stream(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], need_streaming=False,
+                       need_producing=False):
     # video capture gears
     camera_gears: dict[int, ReconnectingRTSPGear] = {}
 
     start_time_loop = datetime.now()
 
     # producer for communication with backend service
-    producer = Producer(config)
+    if need_producing:
+        producer = Producer(config)
 
     # camera buffers for every specific cam and neuroservice
     camera_buffers: dict[int, dict[int, Deque[np.ndarray]]] = {}
@@ -89,12 +96,13 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
             camera_buffers[cam_key][nn_key] = deque(maxlen=int(neuroservices[nn_key].buffer_size))
 
     stream_gears: dict[int, StreamGear] = {}
+    if need_streaming:
 
-    #  Синхронно стримим на фронт
-    for cam_key in cameras.keys():
-        stream_params = {"-livestream": True}
-        stream_gears[cam_key] = StreamGear(output=f"streams/hls{cam_key}/cam{cam_key}.m3u8", format="hls",
-                                           logging=True, **stream_params)
+        #  Синхронно стримим на фронт
+        for cam_key in cameras.keys():
+            stream_params = {"-livestream": True, "-input_framerate": 20}
+            stream_gears[cam_key] = StreamGear(output=f"streams/hls{cam_key}/cam{cam_key}.m3u8", format="hls",
+                                               logging=True, **stream_params)
 
     # синхронно захватываем видео
     for key in cameras.keys():
@@ -122,16 +130,17 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
                 if preprocess_func is not None and not callable(preprocess_func):
                     raise TypeError('preprocess_func is not a function')
 
-                reduce_frame = reducer(frame, percentage=70)
-                for key in stream_gears.keys():
-                    stream_gears[key].stream(reduce_frame)
+                if need_streaming:
+                    reduce_frame = reducer(frame, percentage=70)
+                    for key in stream_gears.keys():
+                        stream_gears[key].stream(reduce_frame)
 
                 frame = preprocess_func(frame)
 
                 #  если буффер заполнен необходимым количеством кадров
                 if len(camera_buffers[cam_key][neuroservice_key]) == int(
                         neuroservices[neuroservice_key].buffer_size) and datetime.now() - start_time_loop > timedelta(
-                    seconds=0.7):
+                    seconds=float(TIMEOUT_SEC)):
                     try:
                         start_time_loop = datetime.now()
 
@@ -139,9 +148,14 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
 
                         # TODO: слидить за количеством потоков
                         # делаем операции ввода вывода в отдельном потоке
-                        threading.Thread(target=predict, args=(
-                            neuroservices[neuroservice_key].url, arr, cam_key, producer, start_time_loop,),
-                                         daemon=True).start()
+                        if need_producing:
+                            threading.Thread(target=predict, args=(
+                                neuroservices[neuroservice_key].url, arr, cam_key, start_time_loop, producer,),
+                                             daemon=True).start()
+                        else:
+                            threading.Thread(target=predict, args=(
+                                neuroservices[neuroservice_key].url, arr, cam_key, start_time_loop, None,),
+                                             daemon=True).start()
 
                     finally:
                         camera_buffers[cam_key][neuroservice_key].clear()
@@ -160,7 +174,7 @@ def process(cameras: dict[int, str], config: dict[int, NeuroserviceConfig]):
     asyncio.run(start_stream(cameras, config))
 
 
-def create_pathes(sources, type='dash'):
+def create_paths(sources, type='dash'):
     for t in sources:
         for d in t:
             for cam_id in d.keys():
@@ -183,15 +197,28 @@ if __name__ == '__main__':
     num_workers = cpu_count()
 
     # get this from database
-    sources = [({1: "./test_violence_videos/violence2.mp4"}, {
-        1: NeuroserviceConfig(url=f"http://localhost:8005/predict_frame", buffer_size=1,
-                              preprocess_func_name="violence_preprocess_v2")
-    }), ({2: "rtsp://cactus.tv:1554/cam50"}, {
-        2: NeuroserviceConfig(url=f"http://localhost:8005/predict_frame", buffer_size=1,
-                              preprocess_func_name="violence_preprocess_v2")
-    })]
+    sources = [({1: "rtsp://cactus.tv:1554/cam223"}, {
+        1: NeuroserviceConfig(url=f"http://localhost:8005/predict_cnn_lstm", buffer_size=30,
+                              preprocess_func_name="violence_preprocess_cnn_lstm")}),
+               ({2: "rtsp://cactus.tv:1554/cam71"}, {
+                   2: NeuroserviceConfig(url=f"http://localhost:8005/predict_frame", buffer_size=1,
+                                         preprocess_func_name="violence_preprocess_v2")})]
 
-    create_pathes(sources, 'hls')
+    # }), ({3: "rtsp://cactus.tv:1554/cam169"}, {
+    #     3: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
+    #                           preprocess_func_name="violence_preprocess_v2")
+    # }), ({6: "rtsp://cactus.tv:1554/cam15"}, {
+    #     6: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
+    #                           preprocess_func_name="violence_preprocess_v2")
+    # }), ({5: "./test_violence_videos/fights_v2.mp4"}, {
+    #     5: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
+    #                           preprocess_func_name="violence_preprocess_v2")
+    # }), ({4: "./test_violence_videos/v_test.mp4"}, {
+    #     4: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
+    #                           preprocess_func_name="violence_preprocess_v2")
+    # })]
+
+    create_paths(sources, 'hls')
 
     with Pool(processes=num_workers) as pool:
         pool.starmap(process,

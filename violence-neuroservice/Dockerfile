@@ -5,7 +5,7 @@ COPY ./pyproject.toml /tmp/
 RUN sed -i '/tensorflow/d' /tmp/pyproject.toml
 RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 
-FROM tensorflow/tensorflow:latest
+FROM tensorflow/tensorflow:latest-gpu
 WORKDIR /code
 RUN apt-get update
 RUN apt-get install ffmpeg libsm6 libxext6  -y

@@ -10,7 +10,11 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-model = load_model("app/neural_networks/test_model/mobile_net_model.h5", compile=False)
+# model = load_model("app/neural_networks/violence_detection_3dcnn/weights.h5", compile=False)
+model = load_model("app/neural_networks/violence_detection_cnn_lstm/weights.h5", compile=False)
+
+
+# model = load_model("app/neural_networks/mobile_net_pretrained/weights.h5", compile=False)
 
 
 @app.get("/")
@@ -23,7 +27,7 @@ class Prediction(BaseModel):
     prediction: float
 
 
-@app.post("/predict_frames64", response_model=Prediction)
+@app.post("/predict_cnn3d", response_model=Prediction)
 def predict(file: bytes = File(...)):
     data = {"success": False, "prediction": -1}
     try:
@@ -48,9 +52,34 @@ def predict(file: bytes = File(...)):
         return data
 
 
-@app.post("/predict_frame", response_model=Prediction)
+@app.post("/predict_cnn_lstm", response_model=Prediction)
 def predict(file: bytes = File(...)):
-    global prev_np
+    data = {"success": False, "prediction": -1}
+    try:
+        process_bound_time = datetime.now()
+        array_image = np.frombuffer(file, dtype=np.float64)
+        processed_frames = np.reshape(array_image, (30, 160, 160, 3))
+        processed_frames = np.expand_dims(processed_frames, axis=0)
+        logging.info(f"process frames bound time: {datetime.now() - process_bound_time}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Bad request: wrong frames, can't parse")
+
+    try:
+        predict_bound_time = datetime.now()
+        print('start_pred')
+        is_violence = model.predict(processed_frames)[0][1]
+
+        data['prediction'] = is_violence
+        data['success'] = True
+        logging.info(f"predict frames bound time: {datetime.now() - predict_bound_time}")
+        logging.info(f"is violence prob: {is_violence}")
+
+    finally:
+        return data
+
+
+@app.post("/predict_cnn2d", response_model=Prediction)
+def predict(file: bytes = File(...)):
     data = {"success": False, "prediction": -1}
     try:
         process_bound_time = datetime.now()
@@ -75,5 +104,4 @@ def predict(file: bytes = File(...)):
 
         logging.info(f"predict frames bound time: {datetime.now() - predict_bound_time}")
     finally:
-
         return data

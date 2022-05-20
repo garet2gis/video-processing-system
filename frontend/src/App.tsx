@@ -88,17 +88,6 @@ function App() {
               <Info camId={1} />
             </Element>
             <Element needMargin>
-              <HlsPlayer source="http://localhost:8000/streams/hls1/cam1.m3u8" />
-              <Info camId={1} />
-            </Element>
-          </Row>
-
-          <Row>
-            <Element needMargin>
-              <HlsPlayer source="http://localhost:8000/streams/hls2/cam2.m3u8" />
-              <Info camId={2} />
-            </Element>
-            <Element needMargin>
               <HlsPlayer source="http://localhost:8000/streams/hls2/cam2.m3u8" />
               <Info camId={2} />
             </Element>
@@ -106,12 +95,23 @@ function App() {
 
           <Row>
             <Element needMargin>
-              <HlsPlayer source="http://localhost:8000/streams/hls2/cam2.m3u8" />
-              <Info camId={2} />
+              <HlsPlayer source="http://localhost:8000/streams/hls3/cam3.m3u8" />
+              <Info camId={3} />
             </Element>
             <Element needMargin>
-              <HlsPlayer source="http://localhost:8000/streams/hls2/cam2.m3u8" />
-              <Info camId={2} />
+              <HlsPlayer source="http://localhost:8000/streams/hls4/cam4.m3u8" />
+              <Info camId={4} />
+            </Element>
+          </Row>
+
+          <Row>
+            <Element needMargin>
+              <HlsPlayer source="http://localhost:8000/streams/hls5/cam5.m3u8" />
+              <Info camId={5} />
+            </Element>
+            <Element needMargin>
+              <HlsPlayer source="http://localhost:8000/streams/hls6/cam6.m3u8" />
+              <Info camId={6} />
             </Element>
           </Row>
         </div>

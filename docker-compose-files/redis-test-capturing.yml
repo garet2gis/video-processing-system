@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  redis:
+    image: redis
+    networks:
+      - network
+
+  modelserver:
+    build:
+      context: ../violence-neuroservice
+      dockerfile: ./redis_app_docker_files/redis_model.Dockerfile
+    depends_on:
+      - redis
+    networks:
+      - network
+    env_file:
+      - ../violence-neuroservice/.env
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == worker
+
+  redis_app:
+    build:
+      context: ../violence-neuroservice
+      dockerfile: ./redis_app_docker_files/redis_app.Dockerfile
+    ports:
+      - "8005:8005"
+    networks:
+      - network
+    depends_on:
+      - redis
+    env_file:
+      - ../violence-neuroservice/.env
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  video-capture-service:
+    build:
+      context: ../video-capture-service
+    env_file:
+      - ../video-capture-service/.env
+    restart: unless-stopped
+    networks:
+      - network
+    ports:
+      - "8001:8001"
+
+networks:
+  network:
+
+volumes:
+  static:
