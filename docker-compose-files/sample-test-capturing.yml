@@ -3,14 +3,14 @@ version: '3'
 services:
   neuroservice_app:
     build:
-      context: ./violence-neuroservice
+      context: ../violence-neuroservice
       dockerfile: ./Dockerfile
     ports:
       - "8005:8005"
     networks:
       - network
     env_file:
-      - ./.env
+      - ../violence-neuroservice/.env
     deploy:
       placement:
         constraints:
@@ -18,9 +18,9 @@ services:
 
   video-capture-service:
     build:
-      context: ./video-capture-service
+      context: ../video-capture-service
     env_file:
-      - ./video-capture-service/.env
+      - ../video-capture-service/.env
     restart: unless-stopped
     networks:
       - network
