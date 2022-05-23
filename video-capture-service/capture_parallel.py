@@ -41,7 +41,7 @@ config = {
 }
 
 
-class NeuroserviceConfig(BaseModel):
+class зNeuroserviceConfig(BaseModel):
     url: str
     buffer_size: int
     preprocess_func_name: str

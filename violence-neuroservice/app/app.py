@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from app.neural_networks.video_transform import video_tranform
 from datetime import datetime
 import logging
-from settings import settings
+from app.settings import settings
 
 logging.basicConfig(level=logging.INFO)
 

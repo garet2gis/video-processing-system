@@ -15,4 +15,4 @@ COPY ./app /code/app
 COPY .env /code/app
 EXPOSE 8005
 
-CMD ["python3","-m","app"]
+CMD ["uvicorn", "app.app:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "8005"]
