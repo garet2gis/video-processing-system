@@ -12,6 +12,12 @@ services:
     env_file:
       - ../violence-neuroservice/.env
     deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
       placement:
         constraints:
           - node.role == manager
