@@ -1,4 +1,4 @@
-version: '3.7'
+version: '3'
 
 services:
     neuroservice_app:
@@ -11,8 +11,13 @@ services:
         env_file:
           - ../violence-neuroservice/.env
         deploy:
-            replicas: 3
-
+            replicas: 2
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: 1
+                          capabilities: [gpu]
 
     nginx-balancer:
         image: nginx
