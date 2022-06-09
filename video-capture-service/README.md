@@ -31,3 +31,21 @@ def example_preprocess_frame(frame: np.ndarray) -> np.ndarray:
         new_frame = new_frame / 255.0
     return new_frame
 ```
+You can describe several cameras with your custom services.
+
+```
+sources_config = [({1: "rtsp://sorce_to_ip_camera1"},
+                   {1: NeuroserviceConfig(url="http://source_to_neuroservice_endpoint1", buffer_size=15,
+                                          preprocess_func_name="example_preprocess_frame1", timeout=1)}),
+                   ({2: "rtsp://sorce_to_ip_camera2"},
+                   {2: NeuroserviceConfig(url="http://source_to_neuroservice_endpoint2", buffer_size=32,
+                                          preprocess_func_name="example_preprocess_frame2", timeout=0.5)}), ...]
+```
+
+You can also describe multiple cameras in one dictionary, then the video streams will be synchronized with each other:
+
+```
+sources_config = [({1: "rtsp://sorce_to_ip_camera1", 2: "rtsp://sorce_to_ip_camera2"},
+                   {1: NeuroserviceConfig(url="http://source_to_neuroservice_endpoint", buffer_size=15,
+                                          preprocess_func_name="example_preprocess_frame", timeout=1)})]
+```
