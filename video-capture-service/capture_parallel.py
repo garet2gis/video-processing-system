@@ -71,8 +71,8 @@ def is_timeout_end(start_time_loop: datetime, timeout_time: int) -> bool:
     return datetime.now() - start_time_loop > timedelta(seconds=float(timeout_time))
 
 
-async def start_capturing(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], need_streaming=False,
-                          need_producing=False):
+async def start_capturing(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], need_streaming=True,
+                          need_producing=True):
     # video capture gears
     camera_gears: dict[int, ReconnectingRTSPGear] = {}
 
