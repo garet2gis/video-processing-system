@@ -6,6 +6,8 @@
 
 https://user-images.githubusercontent.com/42912280/168871565-6ac20985-02f3-4e47-908b-06d3410a618a.mp4
 
+## [Integration custom neuroservice](video-capture-service/README.md)
+
 ## Launching with docker (for x86 platforms)
 
 Need pre-installed docker-compose
