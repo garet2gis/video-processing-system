@@ -41,20 +41,21 @@ services:
     ports:
       - 8001:8001
 
-  video-stream-service:
-    depends_on:
-      - video-capture-service
-    build:
-      context: ./video-stream-service
-    env_file:
-      - ./.env
-    volumes:
-      - static:/streams
-    restart: always
-    networks:
-      - network
-    ports:
-      - ${STREAM_SERVICE_PORT}:8000
+#  video streaming is available in capture service
+#  video-stream-service:
+#    depends_on:
+#      - video-capture-service
+#    build:
+#      context: ./video-stream-service
+#    env_file:
+#      - ./.env
+#    volumes:
+#      - static:/streams
+#    restart: always
+#    networks:
+#      - network
+#    ports:
+#      - ${STREAM_SERVICE_PORT}:8000
 
   backend:
     depends_on:

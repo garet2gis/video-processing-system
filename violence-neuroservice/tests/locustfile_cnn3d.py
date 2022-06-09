@@ -1,4 +1,4 @@
-from locust import HttpUser, task
+from locust import HttpUser, task, between
 import cv2
 import numpy as np
 from utils import frames_to_file
@@ -32,3 +32,5 @@ class TestUser(HttpUser):
     @task
     def predict(self):
         self.client.post("/predict_cnn3d", files=frames_to_file(frames))
+
+    # wait_time = between(1, 2)

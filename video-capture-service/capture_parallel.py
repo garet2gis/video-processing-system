@@ -5,9 +5,9 @@ from ReconnectingRTSPGear.ReconnectingRTSPGear import ReconnectingRTSPGear
 from collections import deque
 from datetime import datetime, timedelta
 import requests
-import preprocess_frames_functions
+import configuration
+from configuration import sources_config, NeuroserviceConfig
 import io
-from pydantic import BaseModel
 import asyncio
 import json
 import threading
@@ -23,7 +23,6 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
-TIMEOUT_SEC = os.getenv('TIMEOUT_SEC')
 TOPIC_NAME = os.getenv('TOPIC_NAME')
 LOCALHOST = os.getenv('LOCALHOST')
 # in docker env: KAFKA_INSTANCE_DOCKER
@@ -41,12 +40,6 @@ config = {
 }
 
 
-class зNeuroserviceConfig(BaseModel):
-    url: str
-    buffer_size: int
-    preprocess_func_name: str
-
-
 def frames_to_file(frames: Any) -> dict[str, io.BytesIO]:
     bytes_image = frames.tobytes()
     stream = io.BytesIO(bytes_image)
@@ -55,7 +48,6 @@ def frames_to_file(frames: Any) -> dict[str, io.BytesIO]:
 
 def prediction_request(url: str, data: dict[str, io.BytesIO]) -> str:
     prediction = requests.post(url, files=data)
-
     return prediction.json()['prediction']
 
 
@@ -65,20 +57,22 @@ def predict(url: str, arr: np.ndarray, cam_key: int, date_time: datetime, produc
     prediction = prediction_request(url, data)
     print(prediction)
     data = {"prediction": prediction, "cam_id": cam_key, "timestamp_delay": date_time.timestamp()}
-
     if producer is not None:
         producer.produce(
             topic=TOPIC_NAME,
             value=json.dumps(data).encode("ascii"),
         )
-
         producer.poll(0)
 
     logging.info(f"io bound time: {datetime.now() - date_time}")
 
 
-async def start_stream(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], need_streaming=False,
-                       need_producing=False):
+def is_timeout_end(start_time_loop: datetime, timeout_time: int) -> bool:
+    return datetime.now() - start_time_loop > timedelta(seconds=float(timeout_time))
+
+
+async def start_capturing(cameras: dict[int, str], neuroservices: dict[int, NeuroserviceConfig], need_streaming=False,
+                          need_producing=False):
     # video capture gears
     camera_gears: dict[int, ReconnectingRTSPGear] = {}
 
@@ -97,14 +91,13 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
 
     stream_gears: dict[int, StreamGear] = {}
     if need_streaming:
-
-        #  Синхронно стримим на фронт
+        #  synchronously stream over the HLS protocol
         for cam_key in cameras.keys():
             stream_params = {"-livestream": True, "-input_framerate": 20}
             stream_gears[cam_key] = StreamGear(output=f"streams/hls{cam_key}/cam{cam_key}.m3u8", format="hls",
                                                logging=True, **stream_params)
 
-    # синхронно захватываем видео
+    # synchronously capturing video
     for key in cameras.keys():
         camera_gears[key] = ReconnectingRTSPGear(
             cam_address=cameras[key],
@@ -122,8 +115,8 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
                 break
 
             for neuroservice_key in neuroservices.keys():
-                # функция препроцессинга кадра для данного нейросервиса
-                preprocess_func = getattr(preprocess_frames_functions,
+                # frame preprocessing function for this neural service
+                preprocess_func = getattr(configuration,
                                           neuroservices[neuroservice_key].preprocess_func_name,
                                           None)
 
@@ -137,17 +130,16 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
 
                 frame = preprocess_func(frame)
 
-                #  если буффер заполнен необходимым количеством кадров
+                #  if buffer is filled with required number of frames
                 if len(camera_buffers[cam_key][neuroservice_key]) == int(
-                        neuroservices[neuroservice_key].buffer_size) and datetime.now() - start_time_loop > timedelta(
-                    seconds=float(TIMEOUT_SEC)):
+                        neuroservices[neuroservice_key].buffer_size) and \
+                        is_timeout_end(start_time_loop, neuroservices[neuroservice_key].timeout):
                     try:
                         start_time_loop = datetime.now()
 
                         arr = np.array(camera_buffers[cam_key][neuroservice_key])
 
-                        # TODO: слидить за количеством потоков
-                        # делаем операции ввода вывода в отдельном потоке
+                        # do IO operations in a separate thread
                         if need_producing:
                             threading.Thread(target=predict, args=(
                                 neuroservices[neuroservice_key].url, arr, cam_key, start_time_loop, producer,),
@@ -159,7 +151,7 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
 
                     finally:
                         camera_buffers[cam_key][neuroservice_key].clear()
-                else:
+                elif is_timeout_end(start_time_loop, neuroservices[neuroservice_key].timeout):
                     camera_buffers[cam_key][neuroservice_key].append(frame)
 
         if is_error:
@@ -171,55 +163,32 @@ async def start_stream(cameras: dict[int, str], neuroservices: dict[int, Neurose
 
 
 def process(cameras: dict[int, str], config: dict[int, NeuroserviceConfig]):
-    asyncio.run(start_stream(cameras, config))
+    asyncio.run(start_capturing(cameras, config))
 
 
-def create_paths(sources, type='dash'):
+def create_paths(sources, protocol_stream_type='dash'):
     for t in sources:
         for d in t:
             for cam_id in d.keys():
-                if os.path.exists(f'streams/{type}{cam_id}'):
+                if os.path.exists(f'streams/{protocol_stream_type}{cam_id}'):
                     try:
-                        os.rmdir(f'streams/{type}{cam_id}')
-                        os.mkdir(f'streams/{type}{cam_id}')
-                        logging.info(f'Made new directory to save stream: streams/{type}{cam_id}')
+                        os.rmdir(f'streams/{protocol_stream_type}{cam_id}')
+                        os.mkdir(f'streams/{protocol_stream_type}{cam_id}')
+                        logging.info(f'Made new directory to save stream: streams/{protocol_stream_type}{cam_id}')
                     except OSError:
                         logging.error('Unable to recreate directory')
                 else:
                     try:
-                        os.mkdir(f'streams/{type}{cam_id}')
-                        logging.info(f'Made new directory to save stream: streams/{type}{cam_id}')
+                        os.mkdir(f'streams/{protocol_stream_type}{cam_id}')
+                        logging.info(f'Made new directory to save stream: streams/{protocol_stream_type}{cam_id}')
                     except OSError:
                         logging.error('Unable to create directory')
 
 
 if __name__ == '__main__':
     num_workers = cpu_count()
-
-    # get this from database
-    sources = [({1: "rtsp://cactus.tv:1554/cam223"}, {
-        1: NeuroserviceConfig(url=f"http://localhost:8005/predict_cnn_lstm", buffer_size=30,
-                              preprocess_func_name="violence_preprocess_cnn_lstm")}),
-               ({2: "rtsp://cactus.tv:1554/cam71"}, {
-                   2: NeuroserviceConfig(url=f"http://localhost:8005/predict_frame", buffer_size=1,
-                                         preprocess_func_name="violence_preprocess_v2")})]
-
-    # }), ({3: "rtsp://cactus.tv:1554/cam169"}, {
-    #     3: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
-    #                           preprocess_func_name="violence_preprocess_v2")
-    # }), ({6: "rtsp://cactus.tv:1554/cam15"}, {
-    #     6: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
-    #                           preprocess_func_name="violence_preprocess_v2")
-    # }), ({5: "./test_violence_videos/fights_v2.mp4"}, {
-    #     5: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
-    #                           preprocess_func_name="violence_preprocess_v2")
-    # }), ({4: "./test_violence_videos/v_test.mp4"}, {
-    #     4: NeuroserviceConfig(url=f"http://134.0.117.96:8005/predict_frame", buffer_size=1,
-    #                           preprocess_func_name="violence_preprocess_v2")
-    # })]
-
+    sources = sources_config
     create_paths(sources, 'hls')
-
     with Pool(processes=num_workers) as pool:
         pool.starmap(process,
                      [s for s in sources])
